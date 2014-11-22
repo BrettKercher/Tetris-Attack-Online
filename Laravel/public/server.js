@@ -7,14 +7,28 @@
  */
 const ROWS = 12;
 const COLS = 6;
-
+var BlockState = Object.freeze({NORM: 0, FALL: 1, BREAK: 2});
 var game_list = [];
 
+/*
+ * Game Object
+ */
 function Game(gd, p1)
 {
     this.grid_data = gd;
     this.player_1 = p1;
     this.player_2 = null;
+}
+
+/**
+ * Block Object
+ */
+function block(y, x, type)
+{
+    this.block_type = type;
+    this.pos_x = x;
+    this.pos_y = y;
+    this.state = BlockState.NORM;
 }
 
 var clients = [];
@@ -62,20 +76,28 @@ io.on('connection', function(socket){
     {
         var grid_data = [];
         var r, c;
+        var temp_block;
 
         for (r = 0; r < ROWS; r++)
         {
             grid_data[r] = [];
             for (c = 0; c < COLS; c++)
             {
-                grid_data[r].push(Math.floor(Math.random() * 5) + 1);
+                if(r >= 6)
+                {
+                    temp_block = new block(r, c, Math.floor(Math.random() * 5) + 1);
+                    grid_data[r].push(temp_block);
+                }
+                else
+                {
+                    grid_data[r].push(0);
+                }
             }
         }
         var game = new Game(grid_data, socket.id);
+        initialize_board(game);
         game_list.push(game);
         callback(game);
-
-        //io.sockets.connected[get_client_by_name(msg).socket].emit("initialize_board", tempGame);
     });
 
 
@@ -195,6 +217,126 @@ function compare(gd)
         }
     }
     return true;
+}
+
+function initialize_board(game)
+{
+    var r, c, i, rr, rc;
+
+    //Remove 6 random blocks to start
+    for(i = 0; i < 5; i++) {
+        rr = Math.floor(Math.random() * 6) + 6;
+        rc = Math.floor(Math.random() * 6);
+
+        while( game.grid_data[rr][rc].state == BlockState.BREAK )
+        {
+            rr = Math.floor(Math.random() * 6) + 6;
+            rc = Math.floor(Math.random() * 6);
+        }
+
+        game.grid_data[rr][rc].state = BlockState.BREAK;
+
+        if (i == 0)
+        {
+            if(rr+1 < ROWS)
+                game.grid_data[rr+1][rc].state = BlockState.BREAK;
+            else
+                game.grid_data[rr-1][rc].state = BlockState.BREAK;
+        }
+    }
+
+
+    //Remove all blocks in the BREAK state
+    for(r = 0; r < ROWS; r++)
+    {
+        for(c = 0; c < COLS; c++)
+        {
+            if(game.grid_data[r][c].state == BlockState.BREAK)
+            {
+                if((r-1) >= 0 && game.grid_data[r-1][c] != 0)
+                {
+                    var i = r;
+                    while( (i-1) >= 0 && game.grid_data[i-1][c] != 0 )
+                    {
+                        game.grid_data[i][c] = game.grid_data[i-1][c];
+                        game.grid_data[i-1][c] = 0;
+                        i--;
+                    }
+
+                }
+                else
+                    game.grid_data[r][c] = 0;
+            }
+        }
+    }
+
+    //Change any blocks that are 3 in a row
+    for (r = 0; r < ROWS; r++)
+    {
+        for (c = 0; c < COLS; c++)
+        {
+            if (game.grid_data[r][c] == 0)
+            {
+                continue;
+            }
+            else
+            {
+                clear_combos(game, r, c);
+            }
+        }
+    }
+}
+
+/*
+ * Checks for 3+ blocks in a row  both vertically and horizontally
+ *  Upon finding a combo, change its middle block to a new type
+ */
+function clear_combos(game, r, c)
+{
+    var i = r;
+    var j = c;
+    var count = 0;
+
+    //Check vertical combos
+    while(i < ROWS && game.grid_data[i][j].block_type == game.grid_data[r][c].block_type)
+    {
+        count++;
+        i++;
+    }
+    if(count >= 3)
+    {
+        i = i - count + Math.floor(count/2);
+        game.grid_data[i][j].block_type = ((game.grid_data[i][j].block_type + 1) % 6);
+        if(game.grid_data[i][j].block_type == 0) game.grid_data[i][j].block_type++;
+        if((j-1) >= 0 && (j+1) <= COLS && game.grid_data[i][j].block_type == game.grid_data[i][j-1].block_type
+            && game.grid_data[i][j].block_type == game.grid_data[i][j+1].block_type)
+        {
+            game.grid_data[i][j].block_type = ((game.grid_data[i][j].block_type + 1) % 6);
+            if(game.grid_data[i][j].block_type == 0) game.grid_data[i][j].block_type++;
+        }
+    }
+
+    count = 0;
+    i = r;
+
+    //Check horizontal combos
+    while(j < COLS && game.grid_data[i][j].block_type == game.grid_data[r][c].block_type)
+    {
+        count++;
+        j++;
+    }
+    if(count >= 3)
+    {
+        j = j - count + Math.floor(count/2);
+        game.grid_data[i][j].block_type = ((game.grid_data[i][j].block_type + 1) % 6);
+        if(game.grid_data[i][j].block_type == 0) game.grid_data[i][j].block_type++;
+        if((i-1) >= 0 && (i+1) <= ROWS && game.grid_data[i][j].block_type == game.grid_data[i-1][j].block_type
+            && game.grid_data[i][j].block_type == game.grid_data[i+1][j].block_type)
+        {
+            game.grid_data[i][j].block_type = ((game.grid_data[i][j].block_type + 1) % 6);
+            if(game.grid_data[i][j].block_type == 0) game.grid_data[i][j].block_type++;
+        }
+    }
 }
 
 server.listen(8080, function(){

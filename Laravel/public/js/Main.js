@@ -182,7 +182,7 @@ function draw_blocks()
         {
             if(grid_data[r][c] != 0)
             {
-                ctx.drawImage(block_img, (grid_data[r][c] - 1) * BLK_SIZE, 0, BLK_SIZE, BLK_SIZE, c * BLK_SIZE, r * BLK_SIZE, BLK_SIZE, BLK_SIZE);
+                ctx.drawImage(block_img, (grid_data[r][c].block_type - 1) * BLK_SIZE, 0, BLK_SIZE, BLK_SIZE, c * BLK_SIZE, r * BLK_SIZE, BLK_SIZE, BLK_SIZE);
             }
         }
     }
