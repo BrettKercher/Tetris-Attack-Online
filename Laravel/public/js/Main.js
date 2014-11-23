@@ -39,6 +39,17 @@ var cur_x;
 var cur_y;
 
 /**
+ * Block Object
+ */
+function block(y, x, type)
+{
+    this.block_type = type;
+    this.pos_x = x;
+    this.pos_y = y;
+    this.state = BlockState.NORM;
+}
+
+/**
  * Image Variables
  */
 var loader;
@@ -182,7 +193,7 @@ function draw_blocks()
         {
             if(grid_data[r][c] != 0)
             {
-                ctx.drawImage(block_img, (grid_data[r][c].block_type - 1) * BLK_SIZE, 0, BLK_SIZE, BLK_SIZE, c * BLK_SIZE, r * BLK_SIZE, BLK_SIZE, BLK_SIZE);
+                ctx.drawImage(block_img, (grid_data[r][c].block_type - 1) * BLK_SIZE, 0, BLK_SIZE, BLK_SIZE, grid_data[r][c].pos_x * BLK_SIZE, grid_data[r][c].pos_y * BLK_SIZE, BLK_SIZE, BLK_SIZE);
             }
         }
     }
@@ -224,12 +235,10 @@ function handle_input(e)
                 cur_x += 1;
                 break;
             case SELECT:
-                var temp = grid_data[cur_y][cur_x];
-                grid_data[cur_y][cur_x] = grid_data[cur_y][cur_x + 1];
-                grid_data[cur_y][cur_x + 1] = temp;
-
                 //Tell the server about the move
                 socket.emit('swap', cur_x, cur_y);
+                //Swap blocks
+                swap_blocks(cur_y, cur_x);
                 break;
             case COMPARE:
                 socket.emit('compare', grid_data);
@@ -239,5 +248,37 @@ function handle_input(e)
     else
     {
         init_game();
+    }
+}
+
+function swap_blocks(y, x)
+{
+    if(grid_data[y][x] == 0 && grid_data[y][x+1] == 0)
+    {
+        return;
+    }
+    else if(grid_data[y][x] == 0)
+    {
+        grid_data[y][x] = grid_data[y][x+1];
+        grid_data[y][x].pos_x -= 1;
+
+        grid_data[y][x+1] = 0;
+    }
+    else if(grid_data[y][x+1] == 0)
+    {
+        grid_data[y][x+1] = grid_data[y][x];
+        grid_data[y][x+1].pos_x += 1;
+
+        grid_data[y][x] = 0;
+    }
+    else
+    {
+        var temp = grid_data[y][x];
+
+        grid_data[y][x] = grid_data[y][x+1];
+        grid_data[y][x].pos_x -= 1;
+
+        grid_data[y][x+1] = temp;
+        grid_data[y][x+1].pos_x += 1;
     }
 }

@@ -40,7 +40,8 @@ var app = express();
 var server = http.createServer(app);
 var io = require('socket.io').listen(server);
 
-io.on('connection', function(socket){
+io.on('connection', function(socket)
+{
 
     console.log('Incoming Connection...');
 
@@ -105,13 +106,38 @@ io.on('connection', function(socket){
      * Simulate a swap of two blocks based on cursor x and y
      * After the swap, check for any matches and send them to the client
      */
-    socket.on('swap', function(cx, cy)
+    socket.on('swap', function(x, y)
     {
         var grid_data = get_game_by_id(socket.id).grid_data;
 
-        var temp = grid_data[cy][cx];
-        grid_data[cy][cx] = grid_data[cy][cx + 1];
-        grid_data[cy][cx + 1] = temp;
+        if(grid_data[y][x] == 0 && grid_data[y][x+1] == 0)
+        {
+            return;
+        }
+        else if(grid_data[y][x] == 0)
+        {
+            grid_data[y][x] = grid_data[y][x+1];
+            grid_data[y][x].pos_x -= 1;
+
+            grid_data[y][x+1] = 0;
+        }
+        else if(grid_data[y][x+1] == 0)
+        {
+            grid_data[y][x+1] = grid_data[y][x];
+            grid_data[y][x+1].pos_x += 1;
+
+            grid_data[y][x] = 0;
+        }
+        else
+        {
+            var temp = grid_data[y][x];
+
+            grid_data[y][x] = grid_data[y][x+1];
+            grid_data[y][x].pos_x -= 1;
+
+            grid_data[y][x+1] = temp;
+            grid_data[y][x+1].pos_x += 1;
+        }
     });
 
     /**
@@ -126,7 +152,7 @@ io.on('connection', function(socket){
         {
             for (c = 0; c < COLS; c++)
             {
-                if(grid_data[r][c] != gd[r][c])
+                if(grid_data[r][c].block_type != gd[r][c].block_type)
                 {
                     console.log("ERROR");
                 }
@@ -219,23 +245,31 @@ function compare(gd)
     return true;
 }
 
+/*
+ * Get the board ready for game start by
+ * -removing 6 random blocks to get an initial pattern
+ * -removing any existing combos
+ */
 function initialize_board(game)
 {
     var r, c, i, rr, rc;
 
-    //Remove 6 random blocks to start
-    for(i = 0; i < 5; i++) {
-        rr = Math.floor(Math.random() * 6) + 6;
+    //Remove 6 random blocks to start, 2 of them from the same column
+    for(i = 0; i < 5; i++)
+    {
+        rr = Math.floor(Math.random() * 6) + 6; //only rows 6-11 have blocks
         rc = Math.floor(Math.random() * 6);
 
+        //Make sure we choose a unique block
         while( game.grid_data[rr][rc].state == BlockState.BREAK )
         {
-            rr = Math.floor(Math.random() * 6) + 6;
+            rr = Math.floor(Math.random() * 6) + 6; //only rows 6-11 have blocks
             rc = Math.floor(Math.random() * 6);
         }
 
         game.grid_data[rr][rc].state = BlockState.BREAK;
 
+        //Remove 2 blocks from the same column on the first pass
         if (i == 0)
         {
             if(rr+1 < ROWS)
@@ -246,8 +280,8 @@ function initialize_board(game)
     }
 
 
-    //Remove all blocks in the BREAK state
-    for(r = 0; r < ROWS; r++)
+    //Remove all blocks in the BREAK state (only rows 6-11 have blocks)
+    for(r = 6; r < ROWS; r++)
     {
         for(c = 0; c < COLS; c++)
         {
@@ -259,6 +293,7 @@ function initialize_board(game)
                     while( (i-1) >= 0 && game.grid_data[i-1][c] != 0 )
                     {
                         game.grid_data[i][c] = game.grid_data[i-1][c];
+                        game.grid_data[i][c].pos_y += 1;
                         game.grid_data[i-1][c] = 0;
                         i--;
                     }
@@ -271,7 +306,7 @@ function initialize_board(game)
     }
 
     //Change any blocks that are 3 in a row
-    for (r = 0; r < ROWS; r++)
+    for (r = 6; r < ROWS; r++)
     {
         for (c = 0; c < COLS; c++)
         {
@@ -308,7 +343,9 @@ function clear_combos(game, r, c)
         i = i - count + Math.floor(count/2);
         game.grid_data[i][j].block_type = ((game.grid_data[i][j].block_type + 1) % 6);
         if(game.grid_data[i][j].block_type == 0) game.grid_data[i][j].block_type++;
-        if((j-1) >= 0 && (j+1) <= COLS && game.grid_data[i][j].block_type == game.grid_data[i][j-1].block_type
+
+        if((j-1) >= 0 && (j+1) < COLS && game.grid_data[i][j] != 0 && game.grid_data[i][j-1] != 0
+            && game.grid_data[i][j+1] != 0 && game.grid_data[i][j].block_type == game.grid_data[i][j-1].block_type
             && game.grid_data[i][j].block_type == game.grid_data[i][j+1].block_type)
         {
             game.grid_data[i][j].block_type = ((game.grid_data[i][j].block_type + 1) % 6);
@@ -330,7 +367,9 @@ function clear_combos(game, r, c)
         j = j - count + Math.floor(count/2);
         game.grid_data[i][j].block_type = ((game.grid_data[i][j].block_type + 1) % 6);
         if(game.grid_data[i][j].block_type == 0) game.grid_data[i][j].block_type++;
-        if((i-1) >= 0 && (i+1) <= ROWS && game.grid_data[i][j].block_type == game.grid_data[i-1][j].block_type
+
+        if((i-1) >= 0 && (i+1) < ROWS && game.grid_data[i][j] != 0 && game.grid_data[i-1][j] != 0
+            && game.grid_data[i+1][j] != 0 && game.grid_data[i][j].block_type == game.grid_data[i-1][j].block_type
             && game.grid_data[i][j].block_type == game.grid_data[i+1][j].block_type)
         {
             game.grid_data[i][j].block_type = ((game.grid_data[i][j].block_type + 1) % 6);
