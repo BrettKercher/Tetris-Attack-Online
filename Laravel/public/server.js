@@ -254,8 +254,8 @@ function initialize_board(game)
 {
     var r, c, i, rr, rc;
 
-    //Remove 6 random blocks to start, 2 of them from the same column
-    for(i = 0; i < 5; i++)
+    //Remove 6 random blocks to start, 3 of them from the same column
+    for(i = 0; i < 4; i++)
     {
         rr = Math.floor(Math.random() * 6) + 6; //only rows 6-11 have blocks
         rc = Math.floor(Math.random() * 6);
@@ -269,13 +269,33 @@ function initialize_board(game)
 
         game.grid_data[rr][rc].state = BlockState.BREAK;
 
-        //Remove 2 blocks from the same column on the first pass
+        //Remove 3 blocks from the same column on the first pass
         if (i == 0)
         {
             if(rr+1 < ROWS)
-                game.grid_data[rr+1][rc].state = BlockState.BREAK;
+            {
+                game.grid_data[rr + 1][rc].state = BlockState.BREAK;
+                if(rr+2 < ROWS)
+                {
+                    game.grid_data[rr + 2][rc].state = BlockState.BREAK;
+                }
+                else
+                {
+                    game.grid_data[rr - 1][rc].state = BlockState.BREAK;
+                }
+            }
             else
-                game.grid_data[rr-1][rc].state = BlockState.BREAK;
+            {
+                game.grid_data[rr - 1][rc].state = BlockState.BREAK;
+                if(rr-2 >= 0)
+                {
+                    game.grid_data[rr - 2][rc].state = BlockState.BREAK;
+                }
+                else
+                {
+                    game.grid_data[rr + 1][rc].state = BlockState.BREAK;
+                }
+            }
         }
     }
 
@@ -297,7 +317,6 @@ function initialize_board(game)
                         game.grid_data[i-1][c] = 0;
                         i--;
                     }
-
                 }
                 else
                     game.grid_data[r][c] = 0;

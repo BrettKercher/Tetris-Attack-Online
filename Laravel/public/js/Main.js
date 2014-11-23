@@ -37,6 +37,7 @@ var ctx;
 var grid_data;
 var cur_x;
 var cur_y;
+var BlockState = Object.freeze({NORM: 0, FALL: 1, BREAK: 2});
 
 /**
  * Block Object
@@ -263,6 +264,11 @@ function swap_blocks(y, x)
         grid_data[y][x].pos_x -= 1;
 
         grid_data[y][x+1] = 0;
+
+        if((y+1) < ROWS && grid_data[y+1][x] == 0)
+            fall(y, x);
+        if((y-1) >= 0 && grid_data[y-1][x+1] != 0)
+            fall(y-1, x+1);
     }
     else if(grid_data[y][x+1] == 0)
     {
@@ -270,6 +276,11 @@ function swap_blocks(y, x)
         grid_data[y][x+1].pos_x += 1;
 
         grid_data[y][x] = 0;
+
+        if((y+1) < ROWS && grid_data[y+1][x+1] == 0)
+            fall(y, x+1);
+        if((y-1) >= 0 && grid_data[y-1][x] != 0)
+            fall(y-1, x);
     }
     else
     {
@@ -280,5 +291,33 @@ function swap_blocks(y, x)
 
         grid_data[y][x+1] = temp;
         grid_data[y][x+1].pos_x += 1;
+    }
+}
+
+/*
+ * Move the block at location y,x and all blocks above it down
+ */
+function fall(y, x)
+{
+    var i = y;
+    var count = 0;
+    //Go up the block stack until hitting a blank space
+    while( grid_data[i][x] != 0)
+    {
+        grid_data[i][x].state = BlockState.FALL;
+        count++;
+        i--;
+    }
+    while(count > 0)
+    {
+        while ((y + 1) < ROWS && grid_data[y + 1][x] == 0)
+        {
+            grid_data[y + 1][x] = grid_data[y][x];
+            grid_data[y + 1][x].pos_y += 1;
+            grid_data[y][x] = 0;
+            y--;
+        }
+        count--;
+        y--;
     }
 }
