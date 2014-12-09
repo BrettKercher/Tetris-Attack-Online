@@ -237,7 +237,7 @@ function handle_input(e)
                 break;
             case SELECT:
                 //Tell the server about the move
-                socket.emit('swap', cur_x, cur_y);
+                socket.emit('swap', cur_y, cur_x);
                 //Swap blocks
                 swap_blocks(cur_y, cur_x);
                 break;
@@ -265,10 +265,21 @@ function swap_blocks(y, x)
 
         grid_data[y][x+1] = 0;
 
+        var did_fall = false;
         if((y+1) < ROWS && grid_data[y+1][x] == 0)
+        {
+            did_fall = true;
             fall(y, x);
+        }
         if((y-1) >= 0 && grid_data[y-1][x+1] != 0)
+        {
+            did_fall = true;
             fall(y-1, x+1);
+        }
+        if(did_fall)
+            check_all();
+        else
+            clear_combos(y, x);
     }
     else if(grid_data[y][x+1] == 0)
     {
@@ -277,10 +288,22 @@ function swap_blocks(y, x)
 
         grid_data[y][x] = 0;
 
+        var did_fall = false;
         if((y+1) < ROWS && grid_data[y+1][x+1] == 0)
-            fall(y, x+1);
+        {
+            did_fall = true;
+            fall(y, x + 1);
+        }
         if((y-1) >= 0 && grid_data[y-1][x] != 0)
-            fall(y-1, x);
+        {
+            did_fall = true;
+            fall(y - 1, x);
+        }
+
+        if(did_fall)
+            check_all();
+        else
+            clear_combos(y, x+1);
     }
     else
     {
@@ -291,6 +314,9 @@ function swap_blocks(y, x)
 
         grid_data[y][x+1] = temp;
         grid_data[y][x+1].pos_x += 1;
+
+        clear_combos(y, x);
+        clear_combos(y, x+1);
     }
 }
 
@@ -308,16 +334,104 @@ function fall(y, x)
         count++;
         i--;
     }
+    i+= count;
     while(count > 0)
     {
-        while ((y + 1) < ROWS && grid_data[y + 1][x] == 0)
+        while ((i + 1) < ROWS && grid_data[i + 1][x] == 0)
         {
-            grid_data[y + 1][x] = grid_data[y][x];
-            grid_data[y + 1][x].pos_y += 1;
-            grid_data[y][x] = 0;
-            y--;
+            grid_data[i + 1][x] = grid_data[i][x];
+            grid_data[i + 1][x].pos_y += 1;
+            grid_data[i][x] = 0;
+            i++;
         }
         count--;
         y--;
+        i=y;
     }
+}
+
+//horizontal fall
+
+function clear_combos(y, x)
+{
+    var i = y;
+    var j = x;
+    var count = 0;
+
+    //Move i to the top most block in the potential combo
+    while(i >= 0 && grid_data[i][j].block_type == grid_data[y][x].block_type)
+    {
+        i--;
+    }
+    i++;
+
+    //Check vertical combos
+    while(i < ROWS && grid_data[i][j].block_type == grid_data[y][x].block_type)
+    {
+        count++;
+        i++;
+    }
+    if(count >= 3)
+    {
+        console.log(count);
+        i -= count;
+        var top = i - 1;
+        while(count > 0)
+        {
+            grid_data[i][j].state = BlockState.BREAK;
+            grid_data[i][j] = 0;
+            count--;
+            i++;
+        }
+        fall(top, j);
+    }
+
+    count = 0;
+    i = y;
+
+    //Move j to the left most block in the potential combo
+    while(j >= 0 && grid_data[i][j].block_type == grid_data[y][x].block_type)
+    {
+        j--;
+    }
+    j++;
+
+    //Check horizontal combos
+    while(j < COLS && grid_data[i][j].block_type == grid_data[y][x].block_type)
+    {
+        count++;
+        j++;
+    }
+    if(count >= 3)
+    {
+        j -= count;
+        while(count > 0)
+        {
+            grid_data[i][j].state = BlockState.BREAK;
+            grid_data[i][j] = 0;
+            count--;
+            fall(y-1, j);
+            j++;
+        }
+    }
+}
+
+function check_all()
+{
+    var r, c;
+    for(r = 0; r < ROWS; r++)
+    {
+        for(c = 0; c < COLS; c++)
+        {
+            if(grid_data[r][c] != 0)
+            {
+                clear_combos(r, c);
+            }
+        }
+    }
+}
+
+function add_row()
+{
+
 }

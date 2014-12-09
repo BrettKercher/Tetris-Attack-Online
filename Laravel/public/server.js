@@ -2,6 +2,13 @@
  * Created by Brett on 11/17/2014.
  */
 
+
+/**
+ * Server Variables
+ */
+const PORT = 8080;
+const DOMAIN = "127.0.0.1";
+
 /**
  * Game Simulation Variables
  */
@@ -40,11 +47,19 @@ var app = express();
 var server = http.createServer(app);
 var io = require('socket.io').listen(server);
 
+//--------------------------------------------------
+//  Handle Incoming Packets:
+//  -login
+//  -request_board
+//  -swap
+//  -compare
+//  -disconnect
+//--------------------------------------------------
+
 io.on('connection', function(socket)
 {
 
     console.log('Incoming Connection...');
-
 
     /**
      * Execute on Receipt of login Message
@@ -106,38 +121,10 @@ io.on('connection', function(socket)
      * Simulate a swap of two blocks based on cursor x and y
      * After the swap, check for any matches and send them to the client
      */
-    socket.on('swap', function(x, y)
+    socket.on('swap', function(y, x)
     {
-        var grid_data = get_game_by_id(socket.id).grid_data;
-
-        if(grid_data[y][x] == 0 && grid_data[y][x+1] == 0)
-        {
-            return;
-        }
-        else if(grid_data[y][x] == 0)
-        {
-            grid_data[y][x] = grid_data[y][x+1];
-            grid_data[y][x].pos_x -= 1;
-
-            grid_data[y][x+1] = 0;
-        }
-        else if(grid_data[y][x+1] == 0)
-        {
-            grid_data[y][x+1] = grid_data[y][x];
-            grid_data[y][x+1].pos_x += 1;
-
-            grid_data[y][x] = 0;
-        }
-        else
-        {
-            var temp = grid_data[y][x];
-
-            grid_data[y][x] = grid_data[y][x+1];
-            grid_data[y][x].pos_x -= 1;
-
-            grid_data[y][x+1] = temp;
-            grid_data[y][x+1].pos_x += 1;
-        }
+        var game = get_game_by_id(socket.id);
+        swap_blocks(y, x, game);
     });
 
     /**
@@ -177,6 +164,10 @@ io.on('connection', function(socket)
     });
 });
 
+
+//-----------------------
+//  HELPER FUNCTIONS
+//-----------------------
 
 /*
  * Get a client from the list of clients by name
@@ -335,7 +326,7 @@ function initialize_board(game)
             }
             else
             {
-                clear_combos(game, r, c);
+                clear_initial_combos(game, r, c);
             }
         }
     }
@@ -345,7 +336,7 @@ function initialize_board(game)
  * Checks for 3+ blocks in a row  both vertically and horizontally
  *  Upon finding a combo, change its middle block to a new type
  */
-function clear_combos(game, r, c)
+function clear_initial_combos(game, r, c)
 {
     var i = r;
     var j = c;
@@ -397,6 +388,192 @@ function clear_combos(game, r, c)
     }
 }
 
-server.listen(8080, function(){
-    console.log('listening on *:8080');
+function swap_blocks(y, x, game)
+{
+    var grid_data = game.grid_data;
+
+    if(grid_data[y][x] == 0 && grid_data[y][x+1] == 0)
+    {
+        return;
+    }
+    else if(grid_data[y][x] == 0)
+    {
+        grid_data[y][x] = grid_data[y][x+1];
+        grid_data[y][x].pos_x -= 1;
+
+        grid_data[y][x+1] = 0;
+
+        var did_fall = false;
+        if((y+1) < ROWS && grid_data[y+1][x] == 0)
+        {
+            did_fall = true;
+            fall(y, x, game);
+        }
+        if((y-1) >= 0 && grid_data[y-1][x+1] != 0)
+        {
+            did_fall = true;
+            fall(y-1, x+1, game);
+        }
+        if(did_fall)
+            check_all(game);
+        else
+            clear_combos(y, x, game);
+    }
+    else if(grid_data[y][x+1] == 0)
+    {
+        grid_data[y][x+1] = grid_data[y][x];
+        grid_data[y][x+1].pos_x += 1;
+
+        grid_data[y][x] = 0;
+
+        var did_fall = false;
+        if((y+1) < ROWS && grid_data[y+1][x+1] == 0)
+        {
+            did_fall = true;
+            fall(y, x + 1, game);
+        }
+        if((y-1) >= 0 && grid_data[y-1][x] != 0)
+        {
+            did_fall = true;
+            fall(y - 1, x, game);
+        }
+
+        if(did_fall)
+            check_all(game);
+        else
+            clear_combos(y, x+1, game);
+    }
+    else
+    {
+        var temp = grid_data[y][x];
+
+        grid_data[y][x] = grid_data[y][x+1];
+        grid_data[y][x].pos_x -= 1;
+
+        grid_data[y][x+1] = temp;
+        grid_data[y][x+1].pos_x += 1;
+
+        clear_combos(y, x, game);
+        clear_combos(y, x+1, game);
+    }
+}
+
+/*
+ * Move the block at location y,x and all blocks above it down
+ */
+function fall(y, x, game)
+{
+    var grid_data = game.grid_data;
+    var i = y;
+    var count = 0;
+    //Go up the block stack until hitting a blank space
+    while( grid_data[i][x] != 0)
+    {
+        grid_data[i][x].state = BlockState.FALL;
+        count++;
+        i--;
+    }
+    i+= count;
+    while(count > 0)
+    {
+        while ((i + 1) < ROWS && grid_data[i + 1][x] == 0)
+        {
+            grid_data[i + 1][x] = grid_data[i][x];
+            grid_data[i + 1][x].pos_y += 1;
+            grid_data[i][x] = 0;
+            i++;
+        }
+        count--;
+        y--;
+        i=y;
+    }
+}
+
+//horizontal fall
+
+function clear_combos(y, x, game)
+{
+    var grid_data = game.grid_data;
+    var i = y;
+    var j = x;
+    var count = 0;
+
+    //Move i to the top most block in the potential combo
+    while(i >= 0 && grid_data[i][j].block_type == grid_data[y][x].block_type)
+    {
+        i--;
+    }
+    i++;
+
+    //Check vertical combos
+    while(i < ROWS && grid_data[i][j].block_type == grid_data[y][x].block_type)
+    {
+        count++;
+        i++;
+    }
+    if(count >= 3)
+    {
+        i -= count;
+        var top = i - 1;
+        while(count > 0)
+        {
+            grid_data[i][j].state = BlockState.BREAK;
+            grid_data[i][j] = 0;
+            count--;
+            i++;
+        }
+        fall(top, j, game);
+    }
+
+    count = 0;
+    i = y;
+
+    //Move j to the left most block in the potential combo
+    while(j >= 0 && grid_data[i][j].block_type == grid_data[y][x].block_type)
+    {
+        j--;
+    }
+    j++;
+
+    //Check horizontal combos
+    while(j < COLS && grid_data[i][j].block_type == grid_data[y][x].block_type)
+    {
+        count++;
+        j++;
+    }
+    if(count >= 3)
+    {
+        j -= count;
+        while(count > 0)
+        {
+            grid_data[i][j].state = BlockState.BREAK;
+            grid_data[i][j] = 0;
+            count--;
+            fall(y-1, j, game);
+            j++;
+        }
+    }
+}
+
+function check_all(game)
+{
+
+    var r, c;
+    for(r = 0; r < ROWS; r++)
+    {
+        for(c = 0; c < COLS; c++)
+        {
+            if(game.grid_data[r][c] != 0)
+            {
+                clear_combos(r, c, game);
+            }
+        }
+    }
+}
+
+
+//Start Listening
+server.listen(PORT, function() {
+    console.log("Server Listening on Port " + PORT);
 });
+
